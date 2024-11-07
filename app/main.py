@@ -42,13 +42,13 @@ ingredient = st.sidebar.text_input("Enter main ingredient:")
 cuisine = st.sidebar.selectbox("Select cuisine:", ["Any"] + sorted(df['Cuisine'].unique().tolist()))
 course = st.sidebar.selectbox("Select course:", ["Any"] + sorted(df['Course'].unique().tolist()))
 diet = st.sidebar.selectbox("Select diet:", ["Any"] + sorted(df['Diet'].unique().tolist()))
-max_prep_time = st.sidebar.slider("Maximum preparation time (minutes):", 0, 120, 60)
+max_total_time = st.sidebar.slider("Maximum time (minutes):", 0, 120, 60)
 
 # Search function
 def search_recipes(ingredient, cuisine, course, diet, max_prep_time):
     results = df[
         (df['Ingredients'].str.contains(ingredient, case=False, na=False)) &
-        (df['PrepTimeInMins'] <= max_prep_time)
+        (df['TotalTimeInMins'] <= max_total_time)
     ]
     
     if cuisine != "Any":
@@ -62,7 +62,7 @@ def search_recipes(ingredient, cuisine, course, diet, max_prep_time):
 
 # Search button
 if st.sidebar.button("Search Recipes"):
-    results = search_recipes(ingredient, cuisine, course, diet, max_prep_time)
+    results = search_recipes(ingredient, cuisine, course, diet, max_total_time)
     
     if len(results) == 0:
         st.write("No recipes found. Try adjusting your search criteria.")
