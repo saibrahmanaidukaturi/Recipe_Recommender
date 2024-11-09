@@ -14,10 +14,6 @@ st.set_page_config(page_title="AI Recipe Recommender", layout="wide")
 current_dir = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(current_dir, '..', 'data', 'food.csv')
 
-# Load environment variables from .env file
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-os.environ["OPENAI_API_KEY"] = api_key
 
 @st.cache_data
 def preprocess_ingredients(df):
