@@ -164,3 +164,6 @@ Recipe_Recommender/
 
 .DS_Store
 
+.streamlit
+
+venv/*
