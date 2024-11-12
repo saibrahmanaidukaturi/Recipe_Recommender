@@ -1,3 +1,18 @@
+.top-heading {
+    padding-bottom: 0px !important;
+    margin-bottom: 0px !important;
+    text-align: center;
+}
+
+.welcome-text {
+    padding: 0px !important;
+    margin: 0px !important;
+}
+hr {
+    margin: 0px !important;
+    padding: 0px !important;
+}
+
 .recipe-card {
     width: 300px; 
     height: 400px; 

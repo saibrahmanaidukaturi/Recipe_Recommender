@@ -33,7 +33,7 @@ def create_tfidf_vectorizer(ingredients):
 
 # Recommendation system
 @st.cache_data
-def get_recommendations(fav_dish, df, num_recommendations=5):
+def get_recommendations(fav_dish, df, num_recommendations=50):
     if 'combined' not in df.columns:
         preprocess_combined(df)
 
@@ -55,12 +55,8 @@ def scrape_recipe_image(url):
         print(f"Error scraping image from {url}: {e}")
     return None
 
-def search_recipes(df, recipe_name, ingredient, cuisine, course, diet, max_total_time):
+def search_recipes(df, cuisine, course, diet, max_total_time):
     results = df[df['TotalTimeInMins'] <= max_total_time]
-    if recipe_name:
-        results = results[results['RecipeName'].str.contains(recipe_name, case=False, na=False)]
-    if ingredient:
-        results = results[results['Ingredients'].str.contains(ingredient, case=False, na=False)]
     if cuisine != "Any":
         results = results[results['Cuisine'] == cuisine]
     if course != "Any":
@@ -68,6 +64,8 @@ def search_recipes(df, recipe_name, ingredient, cuisine, course, diet, max_total
     if diet != "Any":
         results = results[results['Diet'] == diet]
     return results
+
+
 
 # Display functions
 def show_recipe_details(recipe):
@@ -80,12 +78,28 @@ def show_recipe_details(recipe):
     st.write(recipe['Instructions'])
     st.markdown(f"[View full recipe]({recipe['URL']})")
 
+
 def display_search_results(results):
+    # Initialize session state variables if they don't exist
+    if "show_recipe_details" not in st.session_state:
+        st.session_state.show_recipe_details = None
+    if "page" not in st.session_state:
+        st.session_state.page = 1
+
+    # Handle if there are no results
     if len(results) == 0:
-        st.write("No recipes found. Try adjusting your search criteria.")
+        st.write("No recipes found. Try adjusting your filters.")
     else:
+        # Calculate start and end index for the results on the current page
+        start_idx = (st.session_state.page - 1) * 6
+        end_idx = start_idx + 6
+        page_results = results.iloc[start_idx:end_idx]
+
+        # Create columns for displaying the results
         cols = st.columns(3)
-        for idx, (_, row) in enumerate(results.iterrows()):
+        
+        # Iterate over the page results (not the whole results)
+        for idx, (_, row) in enumerate(page_results.iterrows()):
             with cols[idx % 3]:
                 st.markdown(f'''
                     <div class="recipe-card">
@@ -98,8 +112,42 @@ def display_search_results(results):
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
+                # Allow expanding for recipe details
                 with st.expander("See Recipe Details"):
-                    show_recipe_details(row)
+                    # When the user clicks on a recipe, store the index in the session state
+                    if st.button(f"Show Details for {row['RecipeName']}", key=row['RecipeName']):
+                        st.session_state.show_recipe_details = idx
+
+        if st.session_state.show_recipe_details is not None:
+            idx = st.session_state.show_recipe_details
+            recipe = page_results.iloc[idx]
+            
+            with st.expander("Recipe Details", expanded=True):
+                show_recipe_details(recipe)
+                if st.button("Close"):
+                    st.session_state.show_recipe_details = None
+
+        st.markdown("---")
+        
+        # Calculate total pages
+        total_pages = (len(results) - 1) // 6 + 1
+
+        # Display page navigation buttons in the same line
+        col1, col2, col3 = st.columns([2, 8, 1])
+
+        with col1:
+            if st.session_state.page > 1:
+                if st.button("< Previous"):
+                    st.session_state.page -= 1
+
+        with col2:
+            st.markdown(f'<div style="text-align: center;">Page {st.session_state.page} of {total_pages}</div>', unsafe_allow_html=True)
+
+        with col3:
+            if st.session_state.page < total_pages:
+                if st.button("Next >"):
+                    st.session_state.page += 1
+
 
 def display_recommendations(df, fav_dish):
     recommended_recipes = get_recommendations(fav_dish, df)
