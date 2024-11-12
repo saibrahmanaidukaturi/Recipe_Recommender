@@ -63,10 +63,16 @@ else:
             course = st.sidebar.selectbox("Course", ["Any"] + sorted(recommendation['Course'].unique().tolist()))
             diet = st.sidebar.selectbox("Diet", ["Any"] + sorted(recommendation['Diet'].unique().tolist()))
             max_total_time = st.sidebar.slider("Maximum time (minutes):", 0, 360, 360)
-            if st.sidebar.button("Filter") and cuisine!="Any" and course!='Any' and diet!='Any' and max_total_time!='360':
-                results = search_recipes(recommendation,cuisine, course, diet, max_total_time)
-                st.write("Filters applied")
-                display_search_results(results)
+            placeholder = st.empty()
+            if st.sidebar.button("Filter"): 
+                if cuisine!="Any" or course!='Any' or diet!='Any' or max_total_time!='360':
+                    results = search_recipes(recommendation,cuisine, course, diet, max_total_time)
+                    placeholder.write("Filters applied")
+                    display_search_results(results)
+                else:
+                    placeholder.empty()
+                    display_search_results(recommendation)
+
             else:
                 display_search_results(recommendation)
          # Delete Account
