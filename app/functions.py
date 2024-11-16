@@ -8,20 +8,28 @@ from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 import streamlit.components.v1 as components
 import re
-
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 
 # Get CSS path
 def get_css_path():
     return os.path.join(os.path.dirname(__file__), 'styles.css')
 
+@st.cache_data
+def get_csv_path():
+    return os.path.join(os.path.dirname(__file__),"..","data",'food.csv')
+
 # Load and preprocess data
 @st.cache_data
-def load_data(csv_path):
+def load_data():
+    csv_path = get_csv_path()
     return pd.read_csv(csv_path)
 
 @st.cache_data
 def preprocess_combined(df):
+    df['TotalTimeInMins'] = pd.to_numeric(df['TotalTimeInMins'], errors='coerce').fillna(0).astype(int)
     df['combined'] = df['RecipeName'].astype(str) + " " + \
                      df["Ingredients"].astype(str) + " " + \
                      df["TotalTimeInMins"].astype(str) + " " + \
@@ -31,19 +39,25 @@ def preprocess_combined(df):
     return df['combined'].fillna('').str.lower()
 
 
-# Recommendation system
 @st.cache_data
 def get_recommendations(fav_dish, df, num_recommendations=50):
     if 'combined' not in df.columns:
-        preprocess_combined(df)
+        df['combined'] = preprocess_combined(df)
 
     vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(df['combined'])
-    fav_dish_tfidf = vectorizer.transform([fav_dish])
-    cosine_sim = cosine_similarity(fav_dish_tfidf, tfidf_matrix)
-    similar_indices = cosine_sim.argsort()[0, -num_recommendations:][::-1]
-    return df.iloc[similar_indices]
 
+    # Transform the user's input into a TF-IDF vector
+    fav_dish_tfidf = vectorizer.transform([fav_dish])
+    
+    # Calculate cosine similarity between user input and all recipes
+    cosine_sim = cosine_similarity(fav_dish_tfidf, tfidf_matrix)
+    
+    # Get indices of recipes sorted by similarity
+    similar_indices = cosine_sim.argsort()[0, -num_recommendations:][::-1]
+    
+    return df.iloc[similar_indices]
+    
 @st.cache_data
 def scrape_recipe_image(url):
     try:
@@ -162,7 +176,7 @@ def display_search_results(results):
                 if st.button("< Previous"):
                     st.session_state.page -= 1
                     st.session_state.show_recipe_details = None  # Reset recipe details when page changes
-                    st.experimental_rerun() 
+                    st.rerun() 
 
         with col2:
             st.markdown(f'<div style="text-align: center;">Page {st.session_state.page} of {total_pages}</div>', unsafe_allow_html=True)
@@ -175,9 +189,9 @@ def display_search_results(results):
 
 
 @st.cache_data
-def display_recommendations(df, query):
-    #main_ingredient = identify_main_ingredient(query)
-    #df1 = df[df["combined"].str.contains(main_ingredient, case=False, na=False)]
+def display_recommendations(query):
+    df = fetch_data("food")
+    #df = load_data()
     recommendations = get_recommendations(query, df)
     return recommendations
 
@@ -195,20 +209,45 @@ def get_applied_filters(cuisine, course, diet, max_total_time):
         filters.append(f"Max Total Time: {max_total_time} mins")
     return ", ".join(filters) if filters else "No filters applied."
 
+@st.cache_data
+# Fetch data from Firestore and convert to DataFrame
+def fetch_data(collection_name):
+    if not firebase_admin._apps:
+        # Access the service account key from Streamlit secrets and load it as a dictionary
+        service_account_key = st.secrets["firebase"]["service_account_key"]
+        service_account_dict = json.loads(service_account_key)
 
-def identify_main_ingredient(query):
-    # Split the query into individual ingredients
-    ingredients = query.split(', ')
+        # Use the credentials dictionary to initialize Firebase
+        cred = credentials.Certificate(service_account_dict)
+        firebase_admin.initialize_app(cred)
+
+    db = firestore.client()
+    docs = db.collection(collection_name).stream()
+    data = [doc.to_dict() for doc in docs]
+    return pd.DataFrame(data)
+
+# Function to tokenize user input
+def tokenize_input(user_message):
+    url = "https://api.arliai.com/v1/tokenize"
+    ARLIAI_API_KEY = os.getenv('ARLIAI_API_KEY')
     
-    # Define a list of likely main ingredients
-    main_ingredient_keywords = ['chicken', 'paneer', 'potato', 'egg', 'lamb', 'rice', 'fish', 'beef']
+    payload = json.dumps({
+        "model": "Meta-Llama-3.1-8B-Instruct",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": user_message}
+        ]
+    })
     
-    # Check if any main ingredient keywords are present in the query
-    for ingredient in ingredients:
-        if ingredient in main_ingredient_keywords:
-            return ingredient  # Return the first main ingredient found
-        else:
-            pass
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f"Bearer {ARLIAI_API_KEY}"
+    }
+
+    response = requests.post(url, headers=headers, data=payload)
     
-    # If no keyword is found, default to the first ingredient
-    return ingredients[0]
+    if response.status_code == 200:
+        return response.json()  # Return the tokenized output
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        return None

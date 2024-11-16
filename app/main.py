@@ -51,17 +51,16 @@ else:
             with st.expander('Profile'):
                 st.button(label='Sign Out', on_click=auth_functions.sign_out)
         st.markdown("---")
-        csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'food.csv')
-        df = load_data(csv_path)    
+        #csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'food.csv')   
         
         st.markdown("#### Please enter Ingredients/ recipe on your mind?")
         query = st.text_input("")
         if st.button("Get Recommendations") and query:
-            recommendation = display_recommendations(df, query)
+            recommendation = display_recommendations(query)
             st.session_state['recommendation'] = recommendation
             
         if 'recommendation' in st.session_state and st.session_state['recommendation'] is not None:
-            recommendation = display_recommendations(df, query)
+            recommendation = display_recommendations(query)
             st.sidebar.header("Filters")
             cuisine = st.sidebar.selectbox("Cuisine", ["Any"] + sorted(recommendation['Cuisine'].unique().tolist()))
             course = st.sidebar.selectbox("Course", ["Any"] + sorted(recommendation['Course'].unique().tolist()))
