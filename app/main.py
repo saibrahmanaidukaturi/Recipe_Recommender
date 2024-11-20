@@ -65,7 +65,7 @@ else:
             cuisine = st.sidebar.selectbox("Cuisine", ["Any"] + sorted(recommendation['Cuisine'].unique().tolist()))
             course = st.sidebar.selectbox("Course", ["Any"] + sorted(recommendation['Course'].unique().tolist()))
             diet = st.sidebar.selectbox("Diet", ["Any"] + sorted(recommendation['Diet'].unique().tolist()))
-            max_total_time = st.sidebar.slider("Maximum time (minutes):", 0, 360, 360)
+            max_total_time = float(st.sidebar.slider("Maximum time (minutes):", 0, 360, 360))
             placeholder = st.empty()
             
             if st.sidebar.button("Filter"): 
