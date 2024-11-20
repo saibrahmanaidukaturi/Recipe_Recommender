@@ -191,9 +191,9 @@ def display_search_results(results):
 @st.cache_data
 def display_recommendations(query):
     df = fetch_data("food")
-    '''df = load_data()
+    '''df = load_data()'''
     recommendations = get_recommendations(query, df)
-    return recommendations'''
+    return recommendations
 
 
 @st.cache_data
