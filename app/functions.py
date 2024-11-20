@@ -29,7 +29,6 @@ def load_data():
 
 @st.cache_data
 def preprocess_combined(df):
-    df['TotalTimeInMins'] = pd.to_numeric(df['TotalTimeInMins'], errors='coerce').fillna(0).astype(int)
     df['combined'] = df['RecipeName'].astype(str) + " " + \
                      df["Ingredients"].astype(str) + " " + \
                      df["TotalTimeInMins"].astype(str) + " " + \
@@ -43,7 +42,7 @@ def preprocess_combined(df):
 def get_recommendations(fav_dish, df, num_recommendations=50):
     if 'combined' not in df.columns:
         df['combined'] = preprocess_combined(df)
-
+    df['TotalTimeInMins'] = pd.to_numeric(df['TotalTimeInMins'], errors='coerce').fillna(0).astype(int)
     vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(df['combined'])
 
