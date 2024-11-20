@@ -159,7 +159,7 @@ def display_search_results(results):
                 ''', unsafe_allow_html=True)
                 # Allow expanding for recipe details
                 # When the user clicks on a recipe, store the index in the session state
-                if st.button("Show recipe", key=row['RecipeName'], use_container_width=True):
+                if st.button("Show recipe", key=row['RecipeName'], use_container_width=True):   
                     st.session_state.show_recipe_details = start_idx + idx
                     st.rerun()
 
@@ -191,9 +191,9 @@ def display_search_results(results):
 @st.cache_data
 def display_recommendations(query):
     df = fetch_data("food")
-    #df = load_data()
+    '''df = load_data()
     recommendations = get_recommendations(query, df)
-    return recommendations
+    return recommendations'''
 
 
 @st.cache_data
