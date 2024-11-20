@@ -78,6 +78,7 @@ else:
                 else:
                     placeholder.empty()
                     display_search_results(recommendation)
+                    
             else:
                 display_search_results(recommendation)
         with st.expander('Delete Account'):
