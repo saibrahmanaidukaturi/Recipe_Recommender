@@ -23,6 +23,8 @@ if 'user_info' not in st.session_state:
 
     if do_you_have_an_account == 'Yes' and auth_form.form_submit_button(label='Sign In'):
         with auth_notification, st.spinner('Signing in'):
+            email = "saibrahmakaturi@gmail.com"
+            password = "Katuri@12345"
             auth_functions.sign_in(email, password)
 
     elif do_you_have_an_account == 'No' and auth_form.form_submit_button(label='Create Account'):
@@ -41,7 +43,6 @@ if 'user_info' not in st.session_state:
         del st.session_state.auth_warning
 
 else:
-    
     def main():
         col1, col2, col3 = st.columns([2,10,2])
         with col2:
