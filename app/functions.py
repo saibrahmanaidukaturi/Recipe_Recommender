@@ -9,11 +9,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 import re
 import json
+
 import firebase_admin
 from firebase_admin import credentials, firestore
+import torch
+from transformers import BertTokenizer, BertModel
 
-
-# Get CSS path
+# Get CSS path  
 def get_css_path():
     return os.path.join(os.path.dirname(__file__), 'styles.css')
 
@@ -29,7 +31,6 @@ def load_data():
 
 @st.cache_data
 def preprocess_combined(df):
-    df['TotalTimeInMins'] = pd.to_numeric(df['TotalTimeInMins'], errors='coerce').fillna(0).astype(int)
     df['combined'] = df['RecipeName'].astype(str) + " " + \
                      df["Ingredients"].astype(str) + " " + \
                      df["TotalTimeInMins"].astype(str) + " " + \
@@ -38,26 +39,47 @@ def preprocess_combined(df):
                      df["Diet"].astype(str)
     return df['combined'].fillna('').str.lower()
 
+# Initialize the BERT tokenizer and model globally (this happens once)
+@st.cache_data
+def load_bert_model():
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    model = BertModel.from_pretrained('bert-base-uncased')
+    return tokenizer, model
+
+# Function to get BERT embeddings for the combined data
+
+def get_bert_embeddings(texts, tokenizer, model):
+    # Tokenize the input text
+    inputs = tokenizer(texts, return_tensors='pt', padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    # Extract the embeddings (take the last hidden state)
+    embeddings = outputs.last_hidden_state.mean(dim=1).numpy()  # Mean pooling over token embeddings
+    return embeddings
 
 @st.cache_data
-def get_recommendations(fav_dish, df, num_recommendations=50):
+def get_recommendations(fav_dish, df, num_recommendations=5):
     if 'combined' not in df.columns:
         df['combined'] = preprocess_combined(df)
+    df['TotalTimeInMins'] = pd.to_numeric(df['TotalTimeInMins'], errors='coerce').fillna(0).astype(int)
 
-    vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(df['combined'])
+    # Load BERT model and tokenizer
+    tokenizer, model = load_bert_model()
 
-    # Transform the user's input into a TF-IDF vector
-    fav_dish_tfidf = vectorizer.transform([fav_dish])
-    
-    # Calculate cosine similarity between user input and all recipes
-    cosine_sim = cosine_similarity(fav_dish_tfidf, tfidf_matrix)
-    
+    # Get BERT embeddings for all recipes
+    recipe_embeddings = get_bert_embeddings(df['combined'].tolist(), tokenizer, model)
+
+    # Get BERT embedding for the user's favorite dish (similar to the recipe embeddings)
+    fav_dish_embedding = get_bert_embeddings([fav_dish], tokenizer, model)
+
+    # Compute cosine similarity between the user's favorite dish and all recipes
+    cosine_sim = cosine_similarity(fav_dish_embedding, recipe_embeddings)
+
     # Get indices of recipes sorted by similarity
     similar_indices = cosine_sim.argsort()[0, -num_recommendations:][::-1]
-    
+
     return df.iloc[similar_indices]
-    
+
 @st.cache_data
 def scrape_recipe_image(url):
     try:
@@ -96,15 +118,13 @@ def show_recipe_details(recipe):
 
 def scroll_to_recipe_details():
     # Inject JavaScript to scroll to the `recipe-details` section
-    components.html(
-        """
+    components.html('''
         <script>
             const element = document.getElementById("recipe-details");
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        </script>
-        """,
+        </script>''',
         height=0,  # Set height to 0 as we only need to run the script
     )
 
@@ -190,8 +210,8 @@ def display_search_results(results):
 
 @st.cache_data
 def display_recommendations(query):
-    df = fetch_data("food")
-    '''df = load_data()'''
+    '''df = fetch_data("food")'''
+    df = load_data()
     recommendations = get_recommendations(query, df)
     return recommendations
 
@@ -205,49 +225,19 @@ def get_applied_filters(cuisine, course, diet, max_total_time):
         filters.append(f"Course: {course}")
     if diet != "Any":
         filters.append(f"Diet: {diet}")
-    if max_total_time != 360:
-        filters.append(f"Max Total Time: {max_total_time} mins")
-    return ", ".join(filters) if filters else "No filters applied."
+    if max_total_time != 0:
+        filters.append(f"Max Time: {max_total_time} mins")
+    return filters
 
-@st.cache_data
-# Fetch data from Firestore and convert to DataFrame
-def fetch_data(collection_name):
-    if not firebase_admin._apps:
-        # Access the service account key from Streamlit secrets and load it as a dictionary
-        service_account_key = st.secrets["firebase"]["service_account_key"]
-        service_account_dict = json.loads(service_account_key)
 
-        # Use the credentials dictionary to initialize Firebase
-        cred = credentials.Certificate(service_account_dict)
-        firebase_admin.initialize_app(cred)
+def apply_filters():
+    st.sidebar.title("Filter Recipes")
+    cuisine = st.sidebar.selectbox("Cuisine", ["Any"] + sorted(df['Cuisine'].unique().tolist()))
+    course = st.sidebar.selectbox("Course", ["Any"] + sorted(df['Course'].unique().tolist()))
+    diet = st.sidebar.selectbox("Diet", ["Any"] + sorted(df['Diet'].unique().tolist()))
+    max_total_time = st.sidebar.slider("Max Total Time (mins)", 0, 180, 30)
 
-    db = firestore.client()
-    docs = db.collection(collection_name).stream()
-    data = [doc.to_dict() for doc in docs]
-    return pd.DataFrame(data)
+    filters = get_applied_filters(cuisine, course, diet, max_total_time)
+    st.sidebar.write("Applied Filters:", ', '.join(filters))
 
-# Function to tokenize user input
-def tokenize_input(user_message):
-    url = "https://api.arliai.com/v1/tokenize"
-    ARLIAI_API_KEY = os.getenv('ARLIAI_API_KEY')
-    
-    payload = json.dumps({
-        "model": "Meta-Llama-3.1-8B-Instruct",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": user_message}
-        ]
-    })
-    
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f"Bearer {ARLIAI_API_KEY}"
-    }
-
-    response = requests.post(url, headers=headers, data=payload)
-    
-    if response.status_code == 200:
-        return response.json()  # Return the tokenized output
-    else:
-        print(f"Error: {response.status_code} - {response.text}")
-        return None
+    return cuisine, course, diet, max_total_time
