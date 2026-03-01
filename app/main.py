@@ -53,9 +53,9 @@ else:
         #csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'food.csv')   
         
         st.markdown("#### Please enter Ingredients/ recipe on your mind?")
-        query = st.text_input("")
-        if st.button("Get Recommendations") and query:
-            recommendation = display_recommendations(query)
+        query = st.text_input("Ingredients or recipe", label_visibility="collapsed")
+        if st.session_state.get("recommendation") is not None:
+            recommendation = st.session_state["recommendation"]
             st.session_state['recommendation'] = recommendation
             
         if 'recommendation' in st.session_state and st.session_state['recommendation'] is not None:
@@ -68,7 +68,7 @@ else:
             placeholder = st.empty()
             
             if st.sidebar.button("Filter"): 
-                if cuisine!="Any" or course!='Any' or diet!='Any' or max_total_time!='360':
+                if cuisine!="Any" or course!='Any' or diet!='Any' or max_total_time!=360:
                     results = search_recipes(recommendation,cuisine, course, diet, max_total_time)
                     applied_filters = get_applied_filters(cuisine, course, diet, max_total_time)
                     placeholder.write(f"Filters applied : {applied_filters}")

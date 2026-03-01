@@ -40,22 +40,31 @@ def preprocess_combined(df):
     return df['combined'].fillna('').str.lower()
 
 # Initialize the BERT tokenizer and model globally (this happens once)
-@st.cache_data
+@st.cache_resource
 def load_bert_model():
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     model = BertModel.from_pretrained('bert-base-uncased')
+    model.eval()
     return tokenizer, model
 
 # Function to get BERT embeddings for the combined data
 
-def get_bert_embeddings(texts, tokenizer, model):
-    # Tokenize the input text
-    inputs = tokenizer(texts, return_tensors='pt', padding=True, truncation=True, max_length=512)
+def get_bert_embeddings(texts, tokenizer, model, batch_size=32, device=None):
+    if device is None:
+        device = next(model.parameters()).device
+
+    all_embeddings = []
     with torch.no_grad():
-        outputs = model(**inputs)
-    # Extract the embeddings (take the last hidden state)
-    embeddings = outputs.last_hidden_state.mean(dim=1).numpy()  # Mean pooling over token embeddings
-    return embeddings
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            inputs = tokenizer(
+                batch, return_tensors="pt", padding=True, truncation=True, max_length=256
+            ).to(device)
+            outputs = model(**inputs)
+            emb = outputs.last_hidden_state.mean(dim=1)
+            all_embeddings.append(emb.cpu())
+
+    return torch.cat(all_embeddings, dim=0).numpy()
 
 @st.cache_data
 def get_recommendations(fav_dish, df, num_recommendations=5):
@@ -103,8 +112,6 @@ def search_recipes(df, cuisine, course, diet, max_total_time):
         results = results[results['Diet'] == diet]
     return results
 
-
-@st.cache_data
 # Display functions
 def show_recipe_details(recipe):
     st.subheader(recipe['RecipeName'])
